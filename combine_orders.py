@@ -32,8 +32,9 @@ CLOSED_COLS = 42   # columns A–AP
 
 FORMULA_START = "AW"  # first formula column to copy into RAW
 FORMULA_END   = "BX"  # last formula column to copy into RAW
-BA_COL_INDEX  = 4    # 0-based index of column BA within AW:BX (AW=0, AX=1 … BC=6)
+BA_COL_INDEX  = 4    # 0-based index of column BA within AW:BX (AW=0, AX=1 … BA=4)
 BE_COL_INDEX  = 8    # 0-based index of column BE within AW:BX (AW=0, AX=1 … BE=8)
+BT_COL_INDEX  = 23   # 0-based index of column BT within AW:BX (AW=0, AX=1 … BT=23)
 
 
 def find_source_files(folder: str):
@@ -119,12 +120,15 @@ def main():
         
         last_tuesday_str = fiscal_cal["2026"][CURRENT_MONTH]["last_tuesday"]
         last_tuesday = datetime.strptime(last_tuesday_str, "%Y-%m-%d").date()
-        print(f"  Filtering open orders up to last Tuesday: {last_tuesday}")
+        fiscal_end_str = fiscal_cal["2026"][CURRENT_MONTH]["fiscal_end"]
+        fiscal_end = datetime.strptime(fiscal_end_str, "%Y-%m-%d").date()
+        print(f"  Filtering open orders: Main report < {last_tuesday}, Excluded [{last_tuesday} to {fiscal_end}]")
 
-        # keep only open rows where column BA = "Yes" and column BE <= last_tuesday
+        # keep only open rows where column BA = "Yes" and column BE < last_tuesday
         # for No BOL (BA = "No"), we don't filter on column BE
         open_filtered = []
         open_no_bol_filtered = []
+        excluded_bol_sales = 0.0   # sum of BT for BA=Yes rows in [last_tuesday, fiscal_end]
 
         for row in open_vals:
             ba_val = row[BA_COL_INDEX]
@@ -149,8 +153,13 @@ def main():
                 else:
                     continue
                     
-                if be_date <= last_tuesday:
+                if be_date < last_tuesday:
                     open_filtered.append(row)
+                elif last_tuesday <= be_date <= fiscal_end:
+                    # Accumulate gross sales for orders in the gap period
+                    bt_val = row[BT_COL_INDEX]
+                    if isinstance(bt_val, (int, float)):
+                        excluded_bol_sales += bt_val
 
         combined = closed_vals + open_filtered
         print(f"  RAW rows: {len(closed_vals)} closed + {len(open_filtered)} open = {len(combined)}")
@@ -163,6 +172,18 @@ def main():
         raw_no_bol_ws = wb.sheets[RAW_NO_BOL_SHEET]
         if open_no_bol_filtered:
             raw_no_bol_ws.range("A2").value = open_no_bol_filtered
+
+        # Write sidecar JSON so send_email.py can build the BOL note sentence
+        email_notes = {
+            "last_tuesday": last_tuesday.strftime("%Y-%m-%d"),
+            "fiscal_end": fiscal_end_str,
+            "excluded_bol_sales": excluded_bol_sales,
+        }
+        notes_path = output_path.with_suffix(".json")
+        with open(notes_path, "w") as nf:
+            json.dump(email_notes, nf, indent=2)
+        print(f"  Email notes saved → {notes_path.name}")
+        print(f"  Excluded BOL sales (BE > {last_tuesday}): ${excluded_bol_sales:,.0f}")
 
         print("Refreshing pivot tables...")
         # Format: { "Pivot Table Name": {"field": "Field Name", "value": "Filter Value"} }

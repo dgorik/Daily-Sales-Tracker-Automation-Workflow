@@ -1,2 +1,4 @@
 pandas
 xlwings
+pywin32
+python-dotenv

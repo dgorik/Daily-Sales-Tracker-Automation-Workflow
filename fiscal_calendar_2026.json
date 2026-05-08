@@ -3,62 +3,74 @@
     "January": {
       "fiscal_start": "2026-01-04",
       "fiscal_end": "2026-01-31",
-      "last_tuesday": "2026-01-27"
+      "last_tuesday": "2026-01-27",
+      "business_days": 25
     },
     "February": {
       "fiscal_start": "2026-02-01",
       "fiscal_end": "2026-02-28",
-      "last_tuesday": "2026-02-24"
+      "last_tuesday": "2026-02-24",
+      "business_days": 20
     },
     "March": {
       "fiscal_start": "2026-03-01",
       "fiscal_end": "2026-04-04",
-      "last_tuesday": "2026-03-31"
+      "last_tuesday": "2026-03-31",
+      "business_days": 25
     },
     "April": {
       "fiscal_start": "2026-04-05",
       "fiscal_end": "2026-05-02",
-      "last_tuesday": "2026-04-28"
+      "last_tuesday": "2026-04-28",
+      "business_days": 25
     },
     "May": {
       "fiscal_start": "2026-05-03",
       "fiscal_end": "2026-05-30",
-      "last_tuesday": "2026-05-26"
+      "last_tuesday": "2026-05-26",
+      "business_days": 25
     },
     "June": {
       "fiscal_start": "2026-05-31",
       "fiscal_end": "2026-07-04",
-      "last_tuesday": "2026-06-30"
+      "last_tuesday": "2026-06-30",
+      "business_days": 25
     },
     "July": {
       "fiscal_start": "2026-07-05",
       "fiscal_end": "2026-08-01",
-      "last_tuesday": "2026-07-28"
+      "last_tuesday": "2026-07-28",
+      "business_days": 25
     },
     "August": {
       "fiscal_start": "2026-08-02",
       "fiscal_end": "2026-08-29",
-      "last_tuesday": "2026-08-25"
+      "last_tuesday": "2026-08-25",
+      "business_days": 25
     },
     "September": {
       "fiscal_start": "2026-08-30",
       "fiscal_end": "2026-10-03",
-      "last_tuesday": "2026-09-29"
+      "last_tuesday": "2026-09-29",
+      "business_days": 25
     },
     "October": {
       "fiscal_start": "2026-10-04",
       "fiscal_end": "2026-10-31",
-      "last_tuesday": "2026-10-27"
+      "last_tuesday": "2026-10-27",
+      "business_days": 25
     },
     "November": {
       "fiscal_start": "2026-11-01",
       "fiscal_end": "2026-11-28",
-      "last_tuesday": "2026-11-24"
+      "last_tuesday": "2026-11-24",
+      "business_days": 25
     },
     "December": {
       "fiscal_start": "2026-11-29",
       "fiscal_end": "2027-01-02",
-      "last_tuesday": "2026-12-29"
+      "last_tuesday": "2026-12-29",
+      "business_days": 25
     }
   }
 }
