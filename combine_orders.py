@@ -1,6 +1,8 @@
+import json
 import pandas as pd
 import xlwings as xw
-from datetime import date
+from datetime import date, datetime
+from pathlib import Path
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 SOURCE_FOLDER  = r"C:\Daily Sales Tracker Automation\Raw Data"   # <-- folder with 3 source files
@@ -12,23 +14,26 @@ CLOSED_KEYWORD = "Closed"  # files whose name contains this word are closed orde
 OPEN_SHEET     = "Open Orders"    # exact tab name in the output file
 CLOSED_SHEET   = "Closed Orders"  # exact tab name in the output file
 RAW_SHEET      = "RAW"            # exact tab name for the stacked raw output
+RAW_NO_BOL_SHEET = "RAW - Open Only No BOL"  # tab for open orders with no BOL
 
 EXCLUDE_DIVISIONS = [
     "9-MEX/CA/CAR/PR/SA",
     "9 - CANADA",
     "8 - MISCELLANEOUS BILLING",
 ]
+
+CURRENT_MONTH = "May"
 # ──────────────────────────────────────────────────────────────────────────────
 
 import os
-from pathlib import Path
 
 OPEN_COLS   = 32   # columns A–AF
 CLOSED_COLS = 42   # columns A–AP
 
 FORMULA_START = "AW"  # first formula column to copy into RAW
 FORMULA_END   = "BX"  # last formula column to copy into RAW
-BA_COL_INDEX  = 4    # 0-based index of column BC within AW:BX (AW=0, AX=1 … BC=6)
+BA_COL_INDEX  = 4    # 0-based index of column BA within AW:BX (AW=0, AX=1 … BC=6)
+BE_COL_INDEX  = 8    # 0-based index of column BE within AW:BX (AW=0, AX=1 … BE=8)
 
 
 def find_source_files(folder: str):
@@ -107,32 +112,80 @@ def main():
         closed_vals = closed_ws.range(f"{FORMULA_START}2:{FORMULA_END}{closed_last}").value or []
         open_vals   = open_ws.range(f"{FORMULA_START}2:{FORMULA_END}{open_last}").value or []
 
-        # keep only open rows where column BC = "Yes"
-        open_filtered = [row for row in open_vals if row[BA_COL_INDEX] == "Yes"]
+        # Load fiscal calendar to get last Tuesday
+        calendar_path = Path(__file__).parent / "fiscal_calendar_2026.json"
+        with open(calendar_path, "r") as f:
+            fiscal_cal = json.load(f)
+        
+        last_tuesday_str = fiscal_cal["2026"][CURRENT_MONTH]["last_tuesday"]
+        last_tuesday = datetime.strptime(last_tuesday_str, "%Y-%m-%d").date()
+        print(f"  Filtering open orders up to last Tuesday: {last_tuesday}")
+
+        # keep only open rows where column BA = "Yes" and column BE <= last_tuesday
+        # for No BOL (BA = "No"), we don't filter on column BE
+        open_filtered = []
+        open_no_bol_filtered = []
+
+        for row in open_vals:
+            ba_val = row[BA_COL_INDEX]
+            
+            if ba_val == "No":
+                open_no_bol_filtered.append(row)
+                continue
+
+            if ba_val == "Yes":
+                be_val = row[BE_COL_INDEX]
+                if be_val is None:
+                    continue
+                
+                # Convert be_val to date if it's a datetime object
+                if isinstance(be_val, datetime):
+                    be_date = be_val.date()
+                elif isinstance(be_val, str):
+                    try:
+                        be_date = datetime.strptime(be_val, "%Y-%m-%d").date()
+                    except ValueError:
+                        continue
+                else:
+                    continue
+                    
+                if be_date <= last_tuesday:
+                    open_filtered.append(row)
 
         combined = closed_vals + open_filtered
         print(f"  RAW rows: {len(closed_vals)} closed + {len(open_filtered)} open = {len(combined)}")
+        print(f"  RAW No BOL rows: {len(open_no_bol_filtered)}")
 
         raw_ws = wb.sheets[RAW_SHEET]
         if combined:
             raw_ws.range("A2").value = combined
 
+        raw_no_bol_ws = wb.sheets[RAW_NO_BOL_SHEET]
+        if open_no_bol_filtered:
+            raw_no_bol_ws.range("A2").value = open_no_bol_filtered
+
         print("Refreshing pivot tables...")
-        pivot_targets = {
-            "Pivot Table Open Orders":   "Open Orders",
-            "Pivot Table Closed Orders": "Actual Shipped",
+        # Format: { "Pivot Table Name": {"field": "Field Name", "value": "Filter Value"} }
+        pivot_configs = {
+            "Pivot Table Open Orders": {"field": "Type", "value": "Open Orders"},
+            "Pivot Table Closed Orders": {"field": "Type", "value": "Actual Shipped"},
+            "Current Month Bol (Take No's Only)": {"field": "Current Month Bol (Take No's Only)", "value": "No"},
+            "Past Current Month Bol (Take No's Only)": {"field": "Past Current Month Bol (Take No's Only)", "value": "No"},
         }
         for sheet in wb.sheets:
             pts = sheet.api.PivotTables()
             for i in range(1, pts.Count + 1):
                 pt = pts.Item(i)
-                if pt.Name in pivot_targets:
+                if pt.Name in pivot_configs:
                     pt.RefreshTable()
-                    target = pivot_targets[pt.Name]
-                    pf = pt.PivotFields("Type")
-                    pf.EnableMultiplePageItems = False
-                    pf.CurrentPage = target
-                    print(f"  Refreshed '{pt.Name}' → filtered to '{target}'")
+                    config = pivot_configs[pt.Name]
+                    try:
+                        pf = pt.PivotFields(config["field"])
+                        pf.EnableMultiplePageItems = False
+                        pf.CurrentPage = config["value"]
+                        print(f"  Refreshed '{pt.Name}' → filtered '{config['field']}' to '{config['value']}'")
+                    except Exception as e:
+                        print(f"  Warning: Could not set filter on '{pt.Name}': {e}")
 
         wb.save(str(output_path))
         wb.close()
