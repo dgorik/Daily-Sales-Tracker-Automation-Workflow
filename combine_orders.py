@@ -93,6 +93,8 @@ def main():
     output_path = template_path.parent / output_name
 
     print(f"\nLoading template: {template_path}")
+    no_bol_current_total = 0.0
+    no_bol_past_total = 0.0
     with xw.App(visible=False) as app:
         wb = app.books.open(str(template_path))
 
@@ -158,8 +160,11 @@ def main():
                 elif last_tuesday <= be_date <= fiscal_end:
                     # Accumulate gross sales for orders in the gap period
                     bt_val = row[BT_COL_INDEX]
-                    if isinstance(bt_val, (int, float)):
-                        excluded_bol_sales += bt_val
+                    try:
+                        if bt_val is not None:
+                            excluded_bol_sales += float(bt_val)
+                    except (ValueError, TypeError):
+                        continue
 
         combined = closed_vals + open_filtered
         print(f"  RAW rows: {len(closed_vals)} closed + {len(open_filtered)} open = {len(combined)}")
@@ -173,17 +178,13 @@ def main():
         if open_no_bol_filtered:
             raw_no_bol_ws.range("A2").value = open_no_bol_filtered
 
-        # Write sidecar JSON so send_email.py can build the BOL note sentence
-        email_notes = {
-            "last_tuesday": last_tuesday.strftime("%Y-%m-%d"),
-            "fiscal_end": fiscal_end_str,
-            "excluded_bol_sales": excluded_bol_sales,
-        }
-        notes_path = output_path.with_suffix(".json")
-        with open(notes_path, "w") as nf:
-            json.dump(email_notes, nf, indent=2)
-        print(f"  Email notes saved → {notes_path.name}")
-        print(f"  Excluded BOL sales (BE > {last_tuesday}): ${excluded_bol_sales:,.0f}")
+        # Get fiscal dates for email bullets
+        months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+        curr_idx = months.index(CURRENT_MONTH)
+        prev_month_name = months[curr_idx - 1] if curr_idx > 0 else "December"
+        
+        fiscal_start_str = fiscal_cal["2026"][CURRENT_MONTH]["fiscal_start"]
+        prev_fiscal_end_str = fiscal_cal["2026"][prev_month_name]["fiscal_end"]
 
         print("Refreshing pivot tables...")
         # Format: { "Pivot Table Name": {"field": "Field Name", "value": "Filter Value"} }
@@ -193,6 +194,7 @@ def main():
             "Current Month Bol (Take No's Only)": {"field": "Current Month Bol (Take No's Only)", "value": "No"},
             "Past Current Month Bol (Take No's Only)": {"field": "Past Current Month Bol (Take No's Only)", "value": "No"},
         }
+
         for sheet in wb.sheets:
             pts = sheet.api.PivotTables()
             for i in range(1, pts.Count + 1):
@@ -205,8 +207,36 @@ def main():
                         pf.EnableMultiplePageItems = False
                         pf.CurrentPage = config["value"]
                         print(f"  Refreshed '{pt.Name}' → filtered '{config['field']}' to '{config['value']}'")
+                        
+                        # Extract Grand Total for the two specific No BOL pivots
+                        if pt.Name == "Current Month Bol (Take No's Only)":
+                            rng = pt.TableRange1
+                            val = rng.Cells(rng.Rows.Count, rng.Columns.Count).Value
+                            no_bol_current_total = float(val) if val is not None else 0.0
+                        elif pt.Name == "Past Current Month Bol (Take No's Only)":
+                            rng = pt.TableRange1
+                            val = rng.Cells(rng.Rows.Count, rng.Columns.Count).Value
+                            no_bol_past_total = float(val) if val is not None else 0.0
+                            
                     except Exception as e:
-                        print(f"  Warning: Could not set filter on '{pt.Name}': {e}")
+                        print(f"  Warning: Could not set filter or read total on '{pt.Name}': {e}")
+
+        # Write sidecar JSON so send_email.py can build the BOL note sentence
+        email_notes = {
+            "last_tuesday": last_tuesday.strftime("%Y-%m-%d"),
+            "fiscal_end": fiscal_end_str,
+            "excluded_bol_sales": excluded_bol_sales,
+            "no_bol_current_total": no_bol_current_total,
+            "no_bol_past_total": no_bol_past_total,
+            "fiscal_start": fiscal_start_str,
+            "prev_fiscal_end": prev_fiscal_end_str,
+            "prev_fiscal_month_name": prev_month_name,
+        }
+        notes_path = output_path.with_suffix(".json")
+        with open(notes_path, "w") as nf:
+            json.dump(email_notes, nf, indent=2)
+        print(f"  Email notes saved → {notes_path.name}")
+        print(f"  Excluded BOL sales (BE > {last_tuesday}): ${excluded_bol_sales:,.0f}")
 
         wb.save(str(output_path))
         wb.close()

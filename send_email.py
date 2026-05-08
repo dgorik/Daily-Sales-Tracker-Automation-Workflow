@@ -61,15 +61,18 @@ def load_email_notes(tracker_path: Path) -> dict:
 
 def format_bol_note(notes: dict) -> str:
     """
-    Build the BOL disclaimer sentence from the sidecar metadata.
-    Example output:
-      * Please note that the month orders only include open orders through 04/28.
-        There is $3.0M of open orders with BOLs with request dates between
-        04/29/2026 and 05/02/2026.
+    Build the BOL disclaimer sentence and additional bullet points from the sidecar metadata.
     """
     last_tuesday_str = notes.get("last_tuesday")
     fiscal_end_str   = notes.get("fiscal_end")
     excluded_sales   = notes.get("excluded_bol_sales", 0) or 0
+    
+    # New fields for additional bullets
+    no_bol_current = notes.get("no_bol_current_total", 0) or 0
+    no_bol_past    = notes.get("no_bol_past_total", 0) or 0
+    fiscal_start_str = notes.get("fiscal_start")
+    prev_fiscal_end_str = notes.get("prev_fiscal_end")
+    prev_month_name = notes.get("prev_fiscal_month_name", "previous month")
 
     if not last_tuesday_str:
         return ""
@@ -80,23 +83,47 @@ def format_bol_note(notes: dict) -> str:
 
     cutoff_fmt = report_end.strftime("%m/%d")
     start_fmt  = last_tuesday.strftime("%m/%d/%Y")
+    
     if excluded_sales >= 1_000_000:
         sales_fmt = f"${excluded_sales / 1_000_000:.1f}M"
     else:
         sales_fmt = f"${excluded_sales / 1_000:.1f}K"
 
+    main_note = ""
     if fiscal_end_str and excluded_sales > 0:
         fiscal_end = dt.strptime(fiscal_end_str, "%Y-%m-%d").date()
         end_fmt    = fiscal_end.strftime("%m/%d/%Y")
-        return (
+        main_note = (
             f"* Please note that the month orders only include open orders through "
             f"{cutoff_fmt}. There is {sales_fmt} of open orders with BOLs with request "
             f"dates between {start_fmt} and {end_fmt}."
         )
+    else:
+        main_note = f"* Please note that the month orders only include open orders through {cutoff_fmt}."
 
-    return (
-        f"* Please note that the month orders only include open orders through {cutoff_fmt}."
-    )
+    # Build the two new bullet points
+    bullets = []
+    if fiscal_start_str and fiscal_end_str:
+        f_start = dt.strptime(fiscal_start_str, "%Y-%m-%d").date()
+        f_end   = dt.strptime(fiscal_end_str, "%Y-%m-%d").date()
+        f_start_fmt = f_start.strftime("%m/%d/%y")
+        f_end_fmt   = f_end.strftime("%m/%d/%y")
+        
+        current_val_fmt = f"${no_bol_current / 1_000:.0f}K"
+        bullets.append(f"&bull; {current_val_fmt} with request dates in this fiscal month ({f_start_fmt} &ndash; {f_end_fmt})")
+
+    if prev_fiscal_end_str:
+        p_end = dt.strptime(prev_fiscal_end_str, "%Y-%m-%d").date()
+        p_end_fmt = p_end.strftime("%m/%d/%y")
+        
+        past_val_fmt = f"${no_bol_past / 1_000:.0f}K"
+        bullets.append(f"&bull; {past_val_fmt} with request dates in this fiscal month (prior or equal to {p_end_fmt})")
+
+    bullets_html = ""
+    if bullets:
+        bullets_html = "<br>Open Orders without BOLs:<br>" + "<br>".join(bullets)
+
+    return f"{main_note}<br>{bullets_html}"
 
 def get_table_as_html(file_path: Path, sheet_name: str, range_address: str):
     """
@@ -132,8 +159,8 @@ def get_table_as_html(file_path: Path, sheet_name: str, range_address: str):
         
         # Define inline styles
         table_style = "border-collapse: collapse; font-family: Calibri, sans-serif; font-size: 10pt; width: auto; margin: 10px 0;"
-        th_style = "background-color: #4472C4; color: white; padding: 8px; text-align: left; border: 1px solid #ccc;"
-        td_style = "bold, padding: 8px; border: 1px solid #ccc;"
+        th_style = "background-color: #4472C4; color: white; padding: 8px; text-align: center; border: 1px solid #ccc;"
+        td_style = "font-weight: bold, padding: 8px; border: 1px solid #ccc; text-align: center"
         
         # Manually inject inline styles into the HTML string
         html_table = html_table.replace('<table', f'<table style="{table_style}"')
@@ -175,7 +202,7 @@ def send_via_gmail(attachment_path: Path, table_html: str = "", bol_note: str = 
         msg['Cc'] = ", ".join(CC_RECIPIENTS)
         msg['Subject'] = f"{SUBJECT_PREFIX} - {today:%B} {today.day}"
         
-        bol_note_html = f"<p><i>{bol_note}</i></p>" if bol_note else ""
+        bol_note_html = f"<p><i>{bol_note}</i> </p>" if bol_note else ""
 
         # Construct the HTML Body
         html_body = f"""
