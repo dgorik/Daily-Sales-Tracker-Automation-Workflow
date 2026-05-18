@@ -78,8 +78,8 @@ def main():
     closed_df = read_and_stack(closed_files, CLOSED_COLS)
 
     print("Filtering divisions...")
-    open_df   = open_df[~open_df["Division"].isin(EXCLUDE_DIVISIONS)]
-    closed_df = closed_df[~closed_df["DIVISION"].isin(EXCLUDE_DIVISIONS)]
+    open_df   = open_df[open_df["Division"].notna() & (open_df["Division"].str.strip() != "") & ~open_df["Division"].isin(EXCLUDE_DIVISIONS)]
+    closed_df = closed_df[closed_df["DIVISION"].notna() & (closed_df["DIVISION"].str.strip() != "") & ~closed_df["DIVISION"].isin(EXCLUDE_DIVISIONS)]
     print(f"  Open rows after filter   : {len(open_df)}")
     print(f"  Closed rows after filter : {len(closed_df)}")
 
@@ -155,13 +155,14 @@ def main():
                 else:
                     continue
                     
-                if be_date < last_tuesday:
+                if be_date <= last_tuesday:
                     open_filtered.append(row)
-                elif last_tuesday <= be_date <= fiscal_end:
+                elif last_tuesday < be_date <= fiscal_end:
                     # Accumulate gross sales for orders in the gap period
                     bt_val = row[BT_COL_INDEX]
                     try:
                         if bt_val is not None:
+                            bt_val
                             excluded_bol_sales += float(bt_val)
                     except (ValueError, TypeError):
                         continue
