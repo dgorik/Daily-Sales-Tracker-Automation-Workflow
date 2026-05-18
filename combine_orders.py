@@ -8,13 +8,13 @@ from pathlib import Path
 SOURCE_FOLDER  = r"C:\Daily Sales Tracker Automation\Raw Data"   # <-- folder with 3 source files
 TEMPLATE_FILE  = r"C:\Daily Sales Tracker Automation\Tracker\Daily Sales Status - May BLANK Tracker.xlsx" # <-- template workbook (never overwritten)
 
-OPEN_KEYWORD   = "Open"    # files whose name contains this word are open orders
-CLOSED_KEYWORD = "Closed"  # files whose name contains this word are closed orders
+OPEN_KEYWORD   = "Open"    
+CLOSED_KEYWORD = "Closed"  
 
-OPEN_SHEET     = "Open Orders"    # exact tab name in the output file
-CLOSED_SHEET   = "Closed Orders"  # exact tab name in the output file
-RAW_SHEET      = "RAW"            # exact tab name for the stacked raw output
-RAW_NO_BOL_SHEET = "RAW - Open Only No BOL"  # tab for open orders with no BOL
+OPEN_SHEET     = "Open Orders"    
+CLOSED_SHEET   = "Closed Orders"  
+RAW_SHEET      = "RAW"            
+RAW_NO_BOL_SHEET = "RAW - Open Only No BOL"  
 
 EXCLUDE_DIVISIONS = [
     "9-MEX/CA/CAR/PR/SA",
