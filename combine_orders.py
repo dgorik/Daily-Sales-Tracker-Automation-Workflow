@@ -6,7 +6,7 @@ from pathlib import Path
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 SOURCE_FOLDER  = r"C:\Daily Sales Tracker Automation\Raw Data"   # <-- folder with 3 source files
-TEMPLATE_FILE  = r"C:\Daily Sales Tracker Automation\Tracker\Daily Sales Status - May BLANK Tracker.xlsx" # <-- template workbook (never overwritten)
+TEMPLATE_FILE  = r"C:\Daily Sales Tracker Automation\Tracker\Daily Sales Status - June BLANK Tracker.xlsx" # <-- template workbook (never overwritten)
 
 OPEN_KEYWORD   = "Open"    
 CLOSED_KEYWORD = "Closed"  
@@ -22,7 +22,7 @@ EXCLUDE_DIVISIONS = [
     "8 - MISCELLANEOUS BILLING",
 ]
 
-CURRENT_MONTH = "May"
+CURRENT_MONTH = "June"
 # ──────────────────────────────────────────────────────────────────────────────
 
 import os
